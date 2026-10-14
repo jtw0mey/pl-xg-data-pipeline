@@ -2,7 +2,7 @@ import json
 import os
 from understatapi import UnderstatClient
 
-def fetch_epl_player_xg(season="2025"):
+def fetch_epl_player_xg(season="2026"):
     """
     Fetches Premier League player statistics (including xG) from Understat
     and saves the raw JSON output to data/raw.

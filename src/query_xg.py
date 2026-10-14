@@ -6,7 +6,7 @@ def run_sql_queries():
     Connects to DuckDB, queries the cleaned CSV file using standard SQL,
     and displays key analytical insights.
     """
-    csv_path = "data/processed/epl_player_xg_2025_clean.csv"
+    csv_path = "data/processed/epl_player_xg_2026_clean.csv"
     
     if not os.path.exists(csv_path):
         print(f"Error: Cleaned data file {csv_path} not found. Run transform_xg.py first!")

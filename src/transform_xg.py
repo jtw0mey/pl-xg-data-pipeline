@@ -2,7 +2,7 @@ import json
 import os
 import pandas as pd
 
-def transform_player_data(season="2025"):
+def transform_player_data(season="2026"):
     """
     Reads raw JSON player xG data, cleans data types, computes analytical 
     metrics (xG difference), and saves cleaned CSV output.
