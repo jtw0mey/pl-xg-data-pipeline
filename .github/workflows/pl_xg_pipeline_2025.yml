@@ -1,4 +1,4 @@
-name: Weekly Premier League xG Pipeline
+name: Premier League xG Pipeline (2025/26 Season)
 
 # Schedule to run automatically every Wednesday at 06:00 AM UTC
 # (Gives Understat a buffer to process Monday night matches)
