@@ -32,7 +32,7 @@ flowchart LR
 │   └── query_xg.py                    # DuckDB SQL analytics
 ├── requirements.txt                   # Python dependencies
 └── README.md                          # Project documentation
-💻 Local Setup & ExecutionPrerequisitesPython 3.10+GitInstallationClone the repository:Bashgit clone [https://github.com/jtw0mey/pl-xg-data-pipeline.git](https://github.com/jtw0mey/pl-xg-data-pipeline.git)
+💻 Local Setup & ExecutionPrerequisitesPython 3.10+GitInstallationClone the repository:Bashgit clone https://github.com/jtw0mey/pl-xg-data-pipeline.git
 cd pl-xg-data-pipeline
 Set up a virtual environment:Bashpython3 -m venv venv
 source venv/bin/activate
