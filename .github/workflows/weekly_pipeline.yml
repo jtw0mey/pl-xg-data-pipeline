@@ -38,6 +38,6 @@ jobs:
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git add -f data/processed/epl_player_xg_2026_clean.csv
+          git add -f data/processed/epl_player_xg_2025_clean.csv
           git commit -m "auto: update weekly Premier League xG datasets" || echo "No changes to commit"
           git push
