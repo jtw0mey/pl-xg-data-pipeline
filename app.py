@@ -24,12 +24,18 @@ st.markdown("""
 st.title("⚽ Premier League xG Analytics Engine")
 st.markdown("Interactive goals vs. xG metrics extracted from Understat and powered by **DuckDB**, built by Jack Twomey.")
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 @st.cache_data
 def load_season_data(season_year):
     conn = duckdb.connect(database=':memory:')
     
     # Load Players
-    p_path = f'data/processed/epl_player_xg_{season_year}_clean.csv'
+    p_path = os.path.join(BASE_DIR, 'data', 'processed', f'epl_player_xg_{season_year}_clean.csv')
+    if not os.path.exists(p_path):
+        st.error(f"Data file not found at: {p_path}")
+        return pd.DataFrame(), pd.DataFrame()
+        
     df_players = conn.execute(f"SELECT * FROM '{p_path}'").df()
     
     # Clean HTML entities in player names and team titles
@@ -57,7 +63,7 @@ def load_season_data(season_year):
         df_players['xg_per_90'] = df_players['xg_per_90'].round(1)
 
     # Load Teams
-    t_path = f'data/processed/epl_teams_xg_{season_year}_clean.csv'
+    t_path = os.path.join(BASE_DIR, 'data', 'processed', f'epl_teams_xg_{season_year}_clean.csv')
     df_teams = conn.execute(f"SELECT * FROM '{t_path}'").df() if os.path.exists(t_path) else pd.DataFrame()
 
     if not df_teams.empty:
@@ -83,7 +89,7 @@ df_2026_p, df_2026_t = load_season_data(2026)
 df_2025_p, df_2025_t = load_season_data(2025)
 
 # Unified Sidebar Filters
-combined_teams = sorted(list(set(df_2026_p['team_title'].dropna().unique()).union(set(df_2025_p['team_title'].dropna().unique()))))
+combined_teams = sorted(list(set(df_2026_p['team_title'].dropna().unique() if 'team_title' in df_2026_p else []).union(set(df_2025_p['team_title'].dropna().unique() if 'team_title' in df_2025_p else []))))
 
 st.sidebar.header("Filter Players")
 selected_team = st.sidebar.multiselect("Select Team(s)", options=combined_teams, default=[], key="global_team_filter")
@@ -94,6 +100,10 @@ minutes_filter = st.sidebar.slider("Minimum Minutes Played", 0, max_mins_combine
 def render_dashboard(df_p, df_t, season_title_label, season_key):
     st.header(f"📅 {season_title_label} Season Overview")
     
+    if df_p.empty:
+        st.warning("Data not available for this season.")
+        return
+
     filtered_df = df_p.copy()
     if selected_team:
         filtered_df = filtered_df[filtered_df['team_title'].isin(selected_team)]
