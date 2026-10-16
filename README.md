@@ -1,3 +1,4 @@
+
 # ⚽ Premier League xG Data Pipeline & Analytics Engine (2025/26)
 
 [![CI/CD Pipeline](https://github.com/jtw0mey/pl-xg-data-pipeline/actions/workflows/pl_xg_pipeline_2025.yml/badge.svg)](https://github.com/jtw0mey/pl-xg-data-pipeline/actions)
@@ -19,7 +20,32 @@ flowchart LR
     C -->|Feature Engineering & Cleaning| D["data/processed/*_clean.csv"]
     D -->|In-Memory SQL Analytics| E["DuckDB Engine (query_xg.py)"]
     E -->|Automated CI/CD| F[GitHub Actions Runner]
-✨ Key Features & CapabilitiesAutomated Data Ingestion: Extracts raw player performance JSON directly from Understat using understatapi.Data Transformation & Feature Engineering:Parses raw nested JSON responses into clean tabular DataFrames using pandas.Computes analytical features such as xG Overperformance (goals - xG) and normalized xG Per 90 ((xG / minutes) * 90).Handles missing records, standardizes numerical data types, and applies consistent metric rounding.In-Memory Analytical Engine: Uses DuckDB to run fast SQL queries directly over CSV files, generating leaderboards and tactical insights without a database server.On-Demand CI/CD: A GitHub Actions workflow runs the full extract → transform → query → commit process on demand.📊 Analytical Insights (DuckDB Output)Using DuckDB SQL queries over the processed dataset, the engine produces player performance leaderboards.Top Expected Goals (xG) AccumulatorsPlayers generating the highest-quality scoring chances over the season:PlayerTeamGamesGoalsxGxG OverperformanceErling HaalandManchester City312724.12+2.88Mohamed SalahLiverpool321818.05-0.05🛠️ Repository StructurePlaintextpl-xg-data-pipeline/
+✨ Key Features & Capabilities
+Automated Data Ingestion: Extracts raw player performance JSON directly from Understat using understatapi.
+
+Data Transformation & Feature Engineering:
+
+Parses raw nested JSON responses into clean tabular DataFrames using pandas.
+
+Computes analytical features such as xG Overperformance (goals - xG) and normalized xG Per 90 ((xG / minutes) * 90).
+
+Handles missing records, standardizes numerical data types, and applies consistent metric rounding.
+
+In-Memory Analytical Engine: Uses DuckDB to run fast SQL queries directly over CSV files, generating leaderboards and tactical insights without a database server.
+
+On-Demand CI/CD: A GitHub Actions workflow runs the full extract → transform → query → commit process on demand.
+
+📊 Analytical Insights (DuckDB Output)
+Using DuckDB SQL queries over the processed dataset, the engine produces player performance leaderboards.
+
+Top Expected Goals (xG) Accumulators
+Players generating the highest-quality scoring chances over the season:
+Player,Team,Games,Goals,xG,xG Overperformance
+Erling Haaland,Manchester City,31,27,24.12,+2.88
+Mohamed Salah,Liverpool,32,18,18.05,-0.05
+
+🛠️ Repository Structure
+pl-xg-data-pipeline/
 ├── .github/
 │   └── workflows/
 │       └── pl_xg_pipeline_2025.yml    # GitHub Actions workflow
@@ -32,12 +58,24 @@ flowchart LR
 │   └── query_xg.py                    # DuckDB SQL analytics
 ├── requirements.txt                   # Python dependencies
 └── README.md                          # Project documentation
-💻 Local Setup & ExecutionPrerequisitesPython 3.10+GitInstallationClone the repository:Bashgit clone [https://github.com/jtw0mey/pl-xg-data-pipeline.git](https://github.com/jtw0mey/pl-xg-data-pipeline.git)
+
+💻 Local Setup & Execution
+Prerequisites
+Python 3.10+
+
+Git
+
+Installation
+Clone the repository:
+git clone https://github.com/jtw0mey/pl-xg-data-pipeline.git
 cd pl-xg-data-pipeline
-Set up a virtual environment:Bashpython3 -m venv venv
+Set up a virtual environment:
+python3 -m venv venv
 source venv/bin/activate
-Install dependencies:Bashpip install -r requirements.txt
-Run the pipeline manually:Bashpython src/extract_xg.py
+Install dependencies:
+pip install -r requirements.txt
+Run the pipeline manually:
+python src/extract_xg.py
 python src/transform_xg.py
 python src/query_xg.py
 ---
