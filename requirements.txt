@@ -2,7 +2,3 @@ streamlit
 pandas
 duckdb
 plotly
-understat
-aiohttp
-requests
-pytest
