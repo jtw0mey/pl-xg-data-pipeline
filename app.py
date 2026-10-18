@@ -30,10 +30,22 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 def load_season_data(season_year):
     conn = duckdb.connect(database=':memory:')
     
-    # Load Players
+    # Primary file path
     p_path = os.path.join(BASE_DIR, 'data', 'processed', f'epl_player_xg_{season_year}_clean.csv')
+    
+    # Fallback search if specific season file isn't found
     if not os.path.exists(p_path):
-        st.error(f"Data file not found at: {p_path}")
+        fallback_path = os.path.join(BASE_DIR, 'data', 'processed', 'player_stats.csv')
+        if os.path.exists(fallback_path):
+            p_path = fallback_path
+        else:
+            for root, dirs, files in os.walk(BASE_DIR):
+                for file in files:
+                    if file.endswith('.csv') and ('player' in file.lower() or 'xg' in file.lower()):
+                        p_path = os.path.join(root, file)
+                        break
+
+    if not os.path.exists(p_path):
         return pd.DataFrame(), pd.DataFrame()
         
     df_players = conn.execute(f"SELECT * FROM '{p_path}'").df()
@@ -67,6 +79,11 @@ def load_season_data(season_year):
 
     # Load Teams
     t_path = os.path.join(BASE_DIR, 'data', 'processed', f'epl_teams_xg_{season_year}_clean.csv')
+    if not os.path.exists(t_path):
+        t_fallback = os.path.join(BASE_DIR, 'data', 'processed', 'team_stats.csv')
+        if os.path.exists(t_fallback):
+            t_path = t_fallback
+
     df_teams = conn.execute(f"SELECT * FROM '{t_path}'").df() if os.path.exists(t_path) else pd.DataFrame()
 
     if not df_teams.empty:
@@ -115,7 +132,10 @@ combined_positions = sorted(list(set(df_2026_p['position'].dropna().unique() if 
 selected_positions = st.sidebar.multiselect("Select Position(s)", options=combined_positions, key="global_position_filter")
 
 # 4. Minimum Minutes Slider
-max_mins_combined = max(int(df_2026_p['time'].max() if 'time' in df_2026_p.columns else 900), int(df_2025_p['time'].max() if 'time' in df_2025_p.columns else 900))
+max_mins_2026 = int(df_2026_p['time'].max()) if 'time' in df_2026_p.columns and not df_2026_p.empty else 900
+max_mins_2025 = int(df_2025_p['time'].max()) if 'time' in df_2025_p.columns and not df_2025_p.empty else 900
+max_mins_combined = max(max_mins_2026, max_mins_2025)
+
 minutes_filter = st.sidebar.slider("Minimum Minutes Played", 0, max_mins_combined, value=300, step=90, key="global_mins_filter")
 
 # 5. Reset Filters Button at the Bottom
@@ -176,4 +196,90 @@ def render_dashboard(df_p, df_t, season_title_label, season_key):
         plot_penalties = st.toggle("Include Penalties", value=True, key=f"plot_toggle_{season_key}")
 
     plot_goal_col = 'goals' if plot_penalties else 'npg'
-    plot
+    plot_xg_col = 'xG' if plot_penalties else 'npxG'
+    plot_metric_label = "Goals" if plot_penalties else "Non-Penalty Goals"
+    plot_xg_label = "Expected Goals (xG)" if plot_penalties else "Non-Penalty Expected Goals (npxG)"
+    hover_goal_label = "Actual goals" if plot_penalties else "Non-penalty goals"
+    hover_xg_label = "xG" if plot_penalties else "npxG"
+
+    with plot_head1:
+        st.subheader(f"🎯 {plot_metric_label} vs. {plot_xg_label} per player")
+
+    all_players_in_season = sorted(df_p['player_name'].dropna().unique()) if 'player_name' in df_p else []
+    selected_plot_players = st.multiselect(
+        "Search or Select Specific Players to Highlight on Chart",
+        options=all_players_in_season,
+        default=[],
+        key=f"plot_player_compare_{season_key}",
+        placeholder="Type player names to isolate on graph..."
+    )
+
+    plot_filtered_df = filtered_df.copy()
+
+    if selected_plot_players:
+        plot_filtered_df = df_p[df_p['player_name'].isin(selected_plot_players)]
+    else:
+        if not plot_filtered_df.empty and plot_xg_col in plot_filtered_df.columns:
+            top_33_cutoff = plot_filtered_df[plot_xg_col].quantile(0.67)
+            plot_filtered_df = plot_filtered_df[plot_filtered_df[plot_xg_col] >= top_33_cutoff]
+
+    fig = px.scatter(
+        plot_filtered_df,
+        x=plot_xg_col,
+        y=plot_goal_col,
+        size="time" if "time" in plot_filtered_df.columns else None,
+        color="team_title",
+        title=f"Actual {plot_metric_label} vs Expected ({hover_xg_label})",
+        labels={plot_xg_col: f"Expected ({hover_xg_label})", plot_goal_col: f"Actual {plot_metric_label}", "team_title": "Team"},
+        custom_data=["player_name", "team_title"]
+    )
+    fig.update_layout(showlegend=False)
+    
+    hovertemplate_str = (
+        "<b>%{customdata[0]}</b><br>"
+        "%{customdata[1]}<br><br>"
+        f"{hover_goal_label} = %{{y}}<br>"
+        f"{hover_xg_label} = %{{x}}<extra></extra>"
+    )
+    fig.update_traces(hovertemplate=hovertemplate_str)
+
+    if plot_xg_col in plot_filtered_df.columns and not plot_filtered_df.empty:
+        max_val = plot_filtered_df[plot_xg_col].max()
+        fig.add_shape(type="line", x0=0, y0=0, x1=max_val, y1=max_val,
+                      line=dict(color="Gray", dash="dash"))
+                      
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("---")
+
+    # --- SECTION 3: PLAYER DATA TABLE ---
+    table_head1, table_head2 = st.columns([3, 1])
+    with table_head1:
+        st.subheader("📋 Player Data Table")
+    with table_head2:
+        table_penalties = st.toggle("Include Penalties", value=True, key=f"table_toggle_{season_key}")
+
+    selected_players = st.multiselect(
+        "Search or Select Specific Players to Compare",
+        options=all_players_in_season,
+        default=[],
+        key=f"player_compare_{season_key}",
+        placeholder="Type player names to isolate in table..."
+    )
+
+    table_filtered_df = filtered_df.copy()
+    if selected_players:
+        table_filtered_df = df_p[df_p['player_name'].isin(selected_players)]
+
+    if table_penalties:
+        ordered_cols = [
+            ('player_name', 'Player'),
+            ('team_title', 'Team'),
+            ('games', 'Games'),
+            ('time', 'Mins Played'),
+            ('goals', 'Goals'),
+            ('xG', 'xG'),
+            ('xg_per_90', 'xG Per 90'),
+            ('xg_overperformance', 'xG Overperformance')
+        ]
+        sort_col_raw
