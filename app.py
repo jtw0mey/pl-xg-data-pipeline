@@ -11,12 +11,17 @@ st.set_page_config(
     layout="wide"
 )
 
+# Custom CSS for Tab styling and narrow sidebar layout
 st.markdown("""
 <style>
     button[data-baseweb="tab"] {
         font-size: 18px !important;
         font-weight: 700 !important;
         padding: 12px 24px !important;
+    }
+    /* Narrow sidebar width */
+    section[data-testid="stSidebar"] {
+        width: 260px !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -159,8 +164,8 @@ selected_team = st.sidebar.multiselect("Select Team(s)", options=combined_teams,
 # 2. Player Name Search
 search_player = st.sidebar.text_input("Search Player Name", placeholder="e.g. Haaland", key="global_player_search")
 
-# 3. Clean Position Filter
-pos_options = ["Defender", "Forward", "Goalkeeper", "Midfielder"]
+# 3. Clean Position Filter (Forward top, Goalkeeper bottom)
+pos_options = ["Forward", "Midfielder", "Defender", "Goalkeeper"]
 selected_positions = st.sidebar.multiselect("Select Position(s)", options=pos_options, key="global_position_filter")
 
 # 4. Minimum Minutes Slider
@@ -245,8 +250,13 @@ def render_dashboard(df_p, df_t, season_title_label, season_key):
 
     plot_filtered_df = filtered_df.copy()
 
+    # Search selection overrides quantile threshold; default displays top 33% by xG
     if selected_plot_players:
         plot_filtered_df = df_p[df_p['player_name'].isin(selected_plot_players)]
+    else:
+        if not plot_filtered_df.empty and plot_xg_col in plot_filtered_df.columns:
+            top_33_cutoff = plot_filtered_df[plot_xg_col].quantile(0.67)
+            plot_filtered_df = plot_filtered_df[plot_filtered_df[plot_xg_col] >= top_33_cutoff]
 
     fig = px.scatter(
         plot_filtered_df,
