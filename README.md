@@ -40,12 +40,28 @@ flowchart LR
 
 ---
 
+## 🧪 Testing & Error Handling
+
+**Tests:** I added a few simple tests with `pytest` in `tests/test_transform.py`. They use a small sample of made-up data to check that the transformation step works as expected:
+
+- Per-90 values are calculated correctly (`(xG / minutes) * 90`)
+- xG overperformance (`goals - xG`) gives the right positive or negative result
+- HTML characters like `&apos;` are cleaned out of player and club names
+
+**Error handling:** I also added some basic error handling so a problem doesn't crash everything:
+
+- If Understat is unavailable or sends back unexpected data, `extract_xg.py` logs a clear warning instead of failing with a confusing error.
+- If new data couldn't be created, the dashboard shows a friendly message and keeps using the last working data, instead of showing a Python error.
+
+---
+
 ## 🛠️ Tech Stack
 
 - **Language:** Python 3.11
 - **Data processing:** Pandas, DuckDB
 - **Data collection:** `understat`, `asyncio`, `aiohttp`
 - **Dashboard:** Streamlit, Plotly
+- **Testing:** pytest
 - **Automation:** GitHub Actions
 - **Hosting:** Streamlit Community Cloud
 
@@ -53,7 +69,7 @@ flowchart LR
 
 ## 🤖 How I Used AI
 
-I used AI assistants (Claude and Gemini) as development tools throughout this project, for help with writing and debugging code, explaining new concepts, and formatting documentation. I designed the project, made the technical decisions, ran and tested every stage of the pipeline, and worked through the problems that came up along the way. Working this way let me move quickly and building something complete, whilst learning how each part of the pipeline works.
+I used AI assistants (Claude and Gemini) as development tools throughout this project, for help with writing and debugging code, explaining new concepts, and formatting documentation. I designed the project, made the technical decisions, ran and tested every stage of the pipeline, and worked through the problems that came up along the way. Working this way let me move quickly and build something complete, whilst learning how each part of the pipeline works.
 
 ---
 
@@ -64,14 +80,8 @@ I used AI assistants (Claude and Gemini) as development tools throughout this pr
 - Writing SQL queries with DuckDB
 - Scheduling automated jobs with GitHub Actions
 - Building and deploying a dashboard with Streamlit
-
----
-
-## 🔭 Next Steps
-
-- Add tests for the transformation step
-- Add more metrics, such as xA (expected assists)
-- Improve error handling if the data source changes or is unavailable
+- Writing basic tests with pytest
+- Handling errors so one problem doesn't break the whole pipeline
 
 ---
 
@@ -110,4 +120,10 @@ I used AI assistants (Claude and Gemini) as development tools throughout this pr
    python src/extract_xg.py
    python src/transform_xg.py
    streamlit run app.py
+```
+
+5. **Run the tests:**
+
+```bash
+   pytest
 ```
