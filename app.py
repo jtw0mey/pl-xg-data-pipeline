@@ -14,12 +14,8 @@ st.set_page_config(
 # Load Data Function
 @st.cache_data
 def load_data():
-    # Primary path for processed player dataset
     file_path = "data/processed/player_stats.csv"
-    
-    # Fallback check if path differs
     if not os.path.exists(file_path):
-        # Look for any CSV in data/ or root if needed
         for root, dirs, files in os.walk("."):
             for file in files:
                 if file.endswith(".csv") and "player" in file.lower():
@@ -27,6 +23,17 @@ def load_data():
                     break
                     
     df = pd.read_csv(file_path)
+    
+    # Standardize column names dynamically
+    team_col = None
+    for col in ['team_name', 'team', 'team_title', 'teams']:
+        if col in df.columns:
+            team_col = col
+            break
+            
+    if team_col and team_col != 'team_name':
+        df['team_name'] = df[team_col]
+        
     return df
 
 try:
@@ -59,7 +66,7 @@ st.sidebar.header("Filters")
 st.sidebar.button("Reset Filters", on_click=reset_filters, use_container_width=True)
 
 # 1. Team Filter
-teams = sorted(df['team_name'].unique().tolist()) if 'team_name' in df.columns else []
+teams = sorted(df['team_name'].dropna().unique().tolist()) if 'team_name' in df.columns else []
 selected_teams = st.sidebar.multiselect(
     "Select Team(s)",
     options=teams,
@@ -94,15 +101,13 @@ selected_minutes = st.sidebar.slider(
 )
 
 # --- DUCKDB IN-MEMORY QUERYING & FILTERING ---
-# Register the Pandas DataFrame in DuckDB
 con = duckdb.connect(database=':memory:')
 con.register('players', df)
 
-# Build SQL Query dynamically based on active filters
 where_clauses = ["time >= ?", "time IS NOT NULL"]
 params = [selected_minutes]
 
-if selected_teams:
+if selected_teams and 'team_name' in df.columns:
     team_placeholders = ', '.join(['?'] * len(selected_teams))
     where_clauses.append(f"team_name IN ({team_placeholders})")
     params.extend(selected_teams)
@@ -125,7 +130,6 @@ filtered_df = con.execute(query, params).df()
 st.title("⚽ Premier League Expected Goals (xG) Dashboard")
 st.markdown("Automated data pipeline querying Understat performance metrics with DuckDB.")
 
-# Empty State Check
 if filtered_df.empty:
     st.warning("No players match your current filter combination. Try clearing or adjusting some filters!")
 else:
@@ -152,12 +156,11 @@ else:
             size="time" if "time" in filtered_df.columns else None,
             color="team_name" if "team_name" in filtered_df.columns else None,
             hover_name="player_name",
-            hover_data=["position", "time"] if "position" in filtered_df.columns else ["time"],
+            hover_data=["team_name", "position", "time"] if "position" in filtered_df.columns else ["team_name", "time"],
             labels={"xG": "Expected Goals (xG)", "goals": "Actual Goals", "team_name": "Team"},
             title="Player Finishing Performance (Size = Minutes Played)"
         )
         
-        # 1:1 Trendline for Expected vs Actual Comparison
         max_val = max(filtered_df['xG'].max(), filtered_df['goals'].max()) + 1
         fig.add_shape(
             type="line",
