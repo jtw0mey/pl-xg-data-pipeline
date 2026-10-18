@@ -270,7 +270,7 @@ def render_dashboard(df_p, df_t, season_title_label, season_key):
         "%{customdata[1]}<br><br>" if "team_title" in plot_filtered_df.columns else "<b>%{customdata[0]}</b><br><br>"
     ) + f"{hover_goal_label} = %{{y}}<br>{hover_xg_label} = %{{x}}<extra></extra>"
     
-    fig.update_traces(hovertemplate_str)
+    fig.update_traces(hovertemplate=hovertemplate_str)
 
     if plot_xg_col in plot_filtered_df.columns and not plot_filtered_df.empty:
         max_val = plot_filtered_df[plot_xg_col].max()
