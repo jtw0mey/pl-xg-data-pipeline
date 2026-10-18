@@ -53,7 +53,7 @@ flowchart LR
 
 ## 🤖 How I Used AI
 
-I used AI assistants (Claude and Gemini) as development tools throughout this project, for help with writing and debugging code, explaining new concepts, and formatting documentation. I designed the project, made the technical decisions, ran and tested every stage of the pipeline, and worked through the problems that came up along the way. Working this way let me learn quickly while building something complete, and I understand how each part of the pipeline works.
+I used AI assistants (Claude and Gemini) as development tools throughout this project, for help with writing and debugging code, explaining new concepts, and formatting documentation. I designed the project, made the technical decisions, ran and tested every stage of the pipeline, and worked through the problems that came up along the way. Working this way let me move quickly and building something complete, whilst learning how each part of the pipeline works.
 
 ---
 
