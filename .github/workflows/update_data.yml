@@ -25,7 +25,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install understat aiohttp pandas duckdb
+          pip install understat aiohttp pandas duckdb pytest
+
+      - name: Run Transformation Tests
+        run: pytest
 
       - name: Run Data Extraction
         run: python src/extract_xg.py
