@@ -99,7 +99,7 @@ def load_all_data():
             )
         if 'npg' in df_players.columns and 'npxG' in df_players.columns:
             df_players['npxg_overperformance'] = df_players.apply(
-                lambda row: round(row['npg'] - row['npxG'], 1), axis=1
+                lambda row: round(row['npg'] - row['row_npxG'] if 'row_npxG' in row else row['npxG'], 1), axis=1
             )
             
     if 'xg_per_90' in df_players.columns:
@@ -125,6 +125,11 @@ def load_all_data():
         if t_team_col:
             df_teams['team_title'] = df_teams[t_team_col].astype(str).apply(html.unescape)
             
+        # Standardize Games Column name
+        g_col = next((c for c in ['matches', 'games', 'matches_played', 'played'] if c in df_teams.columns), None)
+        if g_col:
+            df_teams['matches'] = df_teams[g_col]
+            
         if 'matches' in df_teams.columns:
             df_teams['xg_per_90'] = df_teams.apply(
                 lambda r: round(r['xG'] / r['matches'], 1) if r['matches'] > 0 else 0.0, axis=1
@@ -138,6 +143,22 @@ def load_all_data():
             df_teams['npxga_per_90'] = df_teams.apply(
                 lambda r: round(r['npxGA'] / r['matches'], 1) if r['matches'] > 0 else 0.0, axis=1
             )
+
+        # Precompute Non-Penalty Goals per Team from player aggregation
+        if 'team_title' in df_players.columns and 'npg' in df_players.columns:
+            team_npg = df_players.groupby('team_title')['npg'].sum().reset_index()
+            team_npg.rename(columns={'npg': 'np_goals_for'}, inplace=True)
+            df_teams = df_teams.merge(team_npg, on='team_title', how='left')
+            df_teams['np_goals_for'] = df_teams['np_goals_for'].fillna(df_teams['goals_for'] if 'goals_for' in df_teams.columns else 0)
+        else:
+            df_teams['np_goals_for'] = df_teams['goals_for'] if 'goals_for' in df_teams.columns else 0
+
+        # Estimate non-penalty goals against (Goals Against minus Penalty xG difference of opponents)
+        if 'goals_against' in df_teams.columns and 'xGA' in df_teams.columns and 'npxGA' in df_teams.columns:
+            df_teams['np_goals_against'] = df_teams['goals_against'] - (df_teams['xGA'] - df_teams['npxGA']).round()
+            df_teams['np_goals_against'] = df_teams['np_goals_against'].apply(lambda x: max(0, int(x)))
+        else:
+            df_teams['np_goals_against'] = df_teams['goals_against'] if 'goals_against' in df_teams.columns else 0
 
     return df_players, df_teams
 
@@ -368,6 +389,7 @@ def render_dashboard(df_p, df_t, season_title_label, season_key):
     if team_penalties:
         team_cols = [
             ('team_title', 'Team'),
+            ('matches', 'Games'),
             ('goals_for', 'Goals For (G)'),
             ('goals_against', 'Goals Against (GA)'),
             ('xG', 'xG'),
@@ -379,14 +401,15 @@ def render_dashboard(df_p, df_t, season_title_label, season_key):
     else:
         team_cols = [
             ('team_title', 'Team'),
-            ('goals_for', 'Goals For (G)'),
-            ('goals_against', 'Goals Against (GA)'),
+            ('matches', 'Games'),
+            ('np_goals_for', 'Non-Penalty Goals For (G)'),
+            ('np_goals_against', 'Non-Penalty Goals Against (GA)'),
             ('npxG', 'Non-Penalty xG'),
             ('npxg_per_90', 'Non-Penalty xG Per 90'),
             ('npxGA', 'Non-Penalty xGA'),
             ('npxga_per_90', 'Non-Penalty xGA Per 90')
         ]
-        sort_team_col = 'goals_for'
+        sort_team_col = 'np_goals_for'
 
     existing_t_cols = [raw for raw, clean in team_cols if raw in team_filtered_df.columns]
     rename_t_dict = {raw: clean for raw, clean in team_cols if raw in team_filtered_df.columns}
