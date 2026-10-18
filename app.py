@@ -11,17 +11,13 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom CSS for Tab styling and narrow sidebar layout
+# Custom CSS for Tab styling
 st.markdown("""
 <style>
     button[data-baseweb="tab"] {
         font-size: 18px !important;
         font-weight: 700 !important;
         padding: 12px 24px !important;
-    }
-    /* Narrow sidebar width */
-    section[data-testid="stSidebar"] {
-        width: 260px !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -250,7 +246,6 @@ def render_dashboard(df_p, df_t, season_title_label, season_key):
 
     plot_filtered_df = filtered_df.copy()
 
-    # Search selection overrides quantile threshold; default displays top 33% by xG
     if selected_plot_players:
         plot_filtered_df = df_p[df_p['player_name'].isin(selected_plot_players)]
     else:
@@ -333,77 +328,4 @@ def render_dashboard(df_p, df_t, season_title_label, season_key):
         sort_col_raw = 'npg'
     
     existing_raw_cols = [raw for raw, clean in ordered_cols if raw in table_filtered_df.columns]
-    rename_dict = {raw: clean for raw, clean in ordered_cols if raw in table_filtered_df.columns}
-    
-    table_df = table_filtered_df[existing_raw_cols].copy()
-    table_df = table_df.rename(columns=rename_dict)
-    
-    sort_by_col = rename_dict.get(sort_col_raw, 'Player')
-    
-    st.dataframe(
-        table_df.sort_values(by=sort_by_col, ascending=False),
-        use_container_width=True,
-        hide_index=True
-    )
-
-    st.markdown("---")
-
-    # --- SECTION 4: TEAM DATA TABLE ---
-    team_head1, team_head2 = st.columns([3, 1])
-    with team_head1:
-        st.subheader("📋 Team Data Table")
-    with team_head2:
-        team_penalties = st.toggle("Include Penalties", value=True, key=f"team_toggle_{season_key}")
-
-    all_teams_in_season = sorted(df_t['team_title'].dropna().unique()) if not df_t.empty else []
-    selected_team_table = st.multiselect(
-        "Search or Select Specific Teams to Compare",
-        options=all_teams_in_season,
-        default=[],
-        key=f"team_table_compare_{season_key}",
-        placeholder="Type team names to isolate in table..."
-    )
-
-    team_filtered_df = df_t.copy() if not df_t.empty else pd.DataFrame()
-    if selected_team_table:
-        team_filtered_df = team_filtered_df[team_filtered_df['team_title'].isin(selected_team_table)]
-    elif selected_team and not team_filtered_df.empty:
-        team_filtered_df = team_filtered_df[team_filtered_df['team_title'].isin(selected_team)]
-
-    if team_penalties:
-        team_cols = [
-            ('team_title', 'Team'),
-            ('goals_for', 'Goals For (G)'),
-            ('goals_against', 'Goals Against (GA)'),
-            ('xG', 'xG'),
-            ('xg_per_90', 'xG Per 90'),
-            ('xGA', 'xGA'),
-            ('xga_per_90', 'xGA Per 90')
-        ]
-        sort_team_col = 'goals_for'
-    else:
-        team_cols = [
-            ('team_title', 'Team'),
-            ('goals_for', 'Goals For (G)'),
-            ('goals_against', 'Goals Against (GA)'),
-            ('npxG', 'Non-Penalty xG'),
-            ('npxg_per_90', 'Non-Penalty xG Per 90'),
-            ('npxGA', 'Non-Penalty xGA'),
-            ('npxga_per_90', 'Non-Penalty xGA Per 90')
-        ]
-        sort_team_col = 'goals_for'
-
-    existing_t_cols = [raw for raw, clean in team_cols if raw in team_filtered_df.columns]
-    rename_t_dict = {raw: clean for raw, clean in team_cols if raw in team_filtered_df.columns}
-
-    display_team_df = team_filtered_df[existing_t_cols].copy().rename(columns=rename_t_dict) if not team_filtered_df.empty else pd.DataFrame()
-    sort_team_by_clean = rename_t_dict.get(sort_team_col, 'Team')
-
-    if not display_team_df.empty:
-        st.dataframe(
-            display_team_df.sort_values(by=sort_team_by_clean, ascending=False),
-            use_container_width=True,
-            hide_index=True
-        )
-
-render_dashboard(df_p, df_t, "2026/27", "2026")
+    rename_dict = {raw:
