@@ -5,7 +5,7 @@ import sys
 import aiohttp
 from understat import Understat
 
-SEASONS = ["2024", "2025"]
+SEASONS = [2025, 2026]
 RAW_DATA_DIR = "data/raw"
 
 async def fetch_season_data(understat, season):

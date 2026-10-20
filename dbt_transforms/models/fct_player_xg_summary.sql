@@ -1,4 +1,5 @@
 SELECT
+    season,
     player_id,
     player_name,
     team_name,
@@ -9,4 +10,4 @@ SELECT
     ROUND(SUM(non_penalty_xg), 2) AS total_npxg,
     ROUND(SUM(goals) - SUM(xg), 2) AS xg_difference
 FROM {{ ref('stg_understat_matches') }}
-GROUP BY 1, 2, 3
+GROUP BY 1, 2, 3, 4
