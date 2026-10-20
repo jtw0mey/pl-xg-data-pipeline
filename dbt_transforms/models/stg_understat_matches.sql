@@ -14,6 +14,7 @@ SELECT
     id AS player_id,
     player_name,
     team_title AS team_name,
+    CAST(games AS INTEGER) AS games_played,
     CAST(goals AS INTEGER) AS goals,
     CAST("xG" AS FLOAT) AS xg,
     CAST(npg AS INTEGER) AS non_penalty_goals,

@@ -3,6 +3,7 @@ SELECT
     player_id,
     player_name,
     team_name,
+    SUM(games_played) AS total_games,
     SUM(minutes_played) AS total_minutes,
     SUM(goals) AS total_goals,
     ROUND(SUM(xg), 2) AS total_xg,

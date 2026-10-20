@@ -61,6 +61,7 @@ def load_all_data(data_version):
 
     # Rename dbt fields to match dashboard expectations
     df_players = df_players.rename(columns={
+        'total_games': 'games',
         'total_minutes': 'time',
         'total_goals': 'goals',
         'total_xg': 'xG',
@@ -290,6 +291,7 @@ def render_dashboard(df_p, df_t, season_title_label, season_key):
         ordered_cols = [
             ('player_name', 'Player'),
             ('team_title', 'Team'),
+            ('games', 'Games Played'),
             ('time', 'Mins Played'),
             ('goals', 'Goals'),
             ('xG', 'xG'),
@@ -301,6 +303,7 @@ def render_dashboard(df_p, df_t, season_title_label, season_key):
         ordered_cols = [
             ('player_name', 'Player'),
             ('team_title', 'Team'),
+            ('games', 'Games Played'),
             ('time', 'Mins Played'),
             ('npg', 'Non-Penalty Goals'),
             ('npxG', 'Non-Penalty xG'),
@@ -346,7 +349,7 @@ def render_dashboard(df_p, df_t, season_title_label, season_key):
     if team_penalties:
         team_cols = [
             ('team_title', 'Team'),
-            ('matches', 'Games'),
+            ('matches', 'Games Played'),
             ('goals_for', 'Goals For (G)'),
             ('goals_against', 'Goals Against (GA)'),
             ('xG', 'xG'),
@@ -354,28 +357,31 @@ def render_dashboard(df_p, df_t, season_title_label, season_key):
             ('xGA', 'xGA'),
             ('xga_per_90', 'xGA Per 90')
         ]
-        sort_team_col = 'goals_for'
     else:
         team_cols = [
             ('team_title', 'Team'),
-            ('matches', 'Games'),
+            ('matches', 'Games Played'),
             ('np_goals_for', 'Non-Penalty Goals For (G)'),
             ('npxG', 'Non-Penalty xG'),
             ('npxg_per_90', 'Non-Penalty xG Per 90'),
             ('npxGA', 'Non-Penalty xGA'),
             ('npxga_per_90', 'Non-Penalty xGA Per 90')
         ]
-        sort_team_col = 'np_goals_for'
 
     existing_t_cols = [raw for raw, clean in team_cols if raw in team_filtered_df.columns]
     rename_t_dict = {raw: clean for raw, clean in team_cols if raw in team_filtered_df.columns}
 
+    # Order like the Premier League table: points, then goal difference, then goals scored
+    if not team_filtered_df.empty and 'points' in team_filtered_df.columns:
+        team_filtered_df = team_filtered_df.assign(
+            goal_difference=team_filtered_df['goals_for'] - team_filtered_df['goals_against']
+        ).sort_values(['points', 'goal_difference', 'goals_for'], ascending=False)
+
     display_team_df = team_filtered_df[existing_t_cols].copy().rename(columns=rename_t_dict) if not team_filtered_df.empty else pd.DataFrame()
-    sort_team_by_clean = rename_t_dict.get(sort_team_col, 'Team')
 
     if not display_team_df.empty:
         st.dataframe(
-            display_team_df.sort_values(by=sort_team_by_clean, ascending=False),
+            display_team_df,
             use_container_width=True,
             hide_index=True
         )
