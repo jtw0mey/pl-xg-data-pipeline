@@ -39,19 +39,21 @@ def map_position_category(pos_str):
 
 @st.cache_data
 def load_all_data():
-    # DIRECT CONNECT TO DBT DUCKDB WAREHOUSE
     db_path = os.path.join(BASE_DIR, 'dbt_transforms', 'dev.duckdb')
-    
     if not os.path.exists(db_path):
-        # Fallback if local dev.duckdb path differs
         db_path = os.path.join(BASE_DIR, 'dev.duckdb')
 
     conn = duckdb.connect(db_path, read_only=True)
     
-    # Query dbt summary model
-    df_players = conn.execute("SELECT * FROM fct_player_xg_summary").df()
-    
-    # Map dbt columns to app expectation
+    # Query dbt summary model explicitly for current 2026/27 season
+    try:
+        df_players = conn.execute("SELECT * FROM fct_player_xg_summary WHERE season = '2026' OR season = 2026").df()
+    except Exception:
+        df_players = conn.execute("SELECT * FROM fct_player_xg_summary").df()
+
+    conn.close()
+
+    # Map dbt columns to app expectations
     df_players = df_players.rename(columns={
         'total_minutes': 'time',
         'total_goals': 'goals',
@@ -92,7 +94,7 @@ def load_all_data():
             lambda r: round((r['npxG'] / r['time']) * 90, 1) if r['time'] > 0 else 0.0, axis=1
         )
 
-    # Build Team Table Aggregation from dbt model
+    # Build Team Table Aggregations with GA & xGA
     if not df_players.empty and 'team_title' in df_players.columns:
         df_teams = df_players.groupby('team_title').agg(
             goals_for=('goals', 'sum'),
@@ -107,13 +109,12 @@ def load_all_data():
         df_teams['np_goals_against'] = 0
         df_teams['npxGA'] = 0.0
         df_teams['xg_per_90'] = (df_teams['xG'] / 7).round(1)
-        df_teams['xga_per_90'] = 0.0
+        df_teams['xga_per_90'] = (df_teams['xGA'] / 7).round(1)
         df_teams['npxg_per_90'] = (df_teams['npxG'] / 7).round(1)
-        df_teams['npxga_per_90'] = 0.0
+        df_teams['npxga_per_90'] = (df_teams['npxGA'] / 7).round(1)
     else:
         df_teams = pd.DataFrame()
 
-    conn.close()
     return df_players, df_teams
 
 df_p, df_t = load_all_data()
@@ -146,7 +147,7 @@ def render_dashboard(df_p, df_t, season_title_label, season_key):
     st.header(f"📅 {season_title_label} Season Overview")
     
     if df_p.empty:
-        st.warning("Data not available from dbt DuckDB warehouse.")
+        st.warning("Data not available from DuckDB database.")
         return
 
     filtered_df = df_p.copy()
@@ -214,6 +215,7 @@ def render_dashboard(df_p, df_t, season_title_label, season_key):
 
     plot_filtered_df = filtered_df.copy()
 
+    # Filter to top 33% of xG performers by default if no players manually selected
     if selected_plot_players:
         plot_filtered_df = df_p[df_p['player_name'].isin(selected_plot_players)]
     else:
@@ -268,11 +270,11 @@ def render_dashboard(df_p, df_t, season_title_label, season_key):
     if selected_players:
         table_filtered_df = df_p[df_p['player_name'].isin(selected_players)]
 
+    # Position column removed
     if table_penalties:
         ordered_cols = [
             ('player_name', 'Player'),
             ('team_title', 'Team'),
-            ('position_cat', 'Position'),
             ('time', 'Mins Played'),
             ('goals', 'Goals'),
             ('xG', 'xG'),
@@ -284,7 +286,6 @@ def render_dashboard(df_p, df_t, season_title_label, season_key):
         ordered_cols = [
             ('player_name', 'Player'),
             ('team_title', 'Team'),
-            ('position_cat', 'Position'),
             ('time', 'Mins Played'),
             ('npg', 'Non-Penalty Goals'),
             ('npxG', 'Non-Penalty xG'),
@@ -327,13 +328,17 @@ def render_dashboard(df_p, df_t, season_title_label, season_key):
     if selected_team_table:
         team_filtered_df = team_filtered_df[team_filtered_df['team_title'].isin(selected_team_table)]
 
+    # Restored Goals Against (GA), xGA, xG Per 90, xGA Per 90
     if team_penalties:
         team_cols = [
             ('team_title', 'Team'),
             ('matches', 'Games'),
             ('goals_for', 'Goals For (G)'),
+            ('goals_against', 'Goals Against (GA)'),
             ('xG', 'xG'),
-            ('xg_per_90', 'xG Per 90')
+            ('xg_per_90', 'xG Per 90'),
+            ('xGA', 'xGA'),
+            ('xga_per_90', 'xGA Per 90')
         ]
         sort_team_col = 'goals_for'
     else:
@@ -341,8 +346,11 @@ def render_dashboard(df_p, df_t, season_title_label, season_key):
             ('team_title', 'Team'),
             ('matches', 'Games'),
             ('np_goals_for', 'Non-Penalty Goals For (G)'),
+            ('np_goals_against', 'Non-Penalty Goals Against (GA)'),
             ('npxG', 'Non-Penalty xG'),
-            ('npxg_per_90', 'Non-Penalty xG Per 90')
+            ('npxg_per_90', 'Non-Penalty xG Per 90'),
+            ('npxGA', 'Non-Penalty xGA'),
+            ('npxga_per_90', 'Non-Penalty xGA Per 90')
         ]
         sort_team_col = 'np_goals_for'
 
@@ -359,5 +367,5 @@ def render_dashboard(df_p, df_t, season_title_label, season_key):
             hide_index=True
         )
 
-# EXPLICITLY CALL 2026/27 SEASON OVERVIEW
+# Render 2026/27 season
 render_dashboard(df_p, df_t, "2026/27", "2026")
