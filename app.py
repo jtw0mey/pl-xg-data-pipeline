@@ -39,82 +39,98 @@ def map_position_category(pos_str):
 
 @st.cache_data
 def load_all_data():
-    db_path = os.path.join(BASE_DIR, 'dbt_transforms', 'dev.duckdb')
-    if not os.path.exists(db_path):
-        db_path = os.path.join(BASE_DIR, 'dev.duckdb')
-
-    conn = duckdb.connect(db_path, read_only=True)
+    conn = duckdb.connect(database=':memory:')
     
-    # Query dbt summary model explicitly for current 2026/27 season
-    try:
-        df_players = conn.execute("SELECT * FROM fct_player_xg_summary WHERE season = '2026' OR season = 2026").df()
-    except Exception:
-        df_players = conn.execute("SELECT * FROM fct_player_xg_summary").df()
-
-    conn.close()
-
-    # Map dbt columns to app expectations
-    df_players = df_players.rename(columns={
-        'total_minutes': 'time',
-        'total_goals': 'goals',
-        'total_xg': 'xG',
-        'total_npg': 'npg',
-        'total_npxg': 'npxG',
-        'team_name': 'team_title'
-    })
-    
-    if 'player_name' in df_players.columns:
-        df_players['player_name'] = df_players['player_name'].astype(str).apply(html.unescape)
+    # 1. Load 2026/27 Player CSV
+    p_path = os.path.join(BASE_DIR, 'data', 'processed', 'epl_player_xg_2026_clean.csv')
+    if not os.path.exists(p_path):
+        p_path = os.path.join(BASE_DIR, 'data', 'processed', 'player_stats.csv')
         
-    if 'team_title' in df_players.columns:
-        df_players['team_title'] = df_players['team_title'].astype(str).apply(
-            lambda x: html.unescape(x).split(',')[-1].strip() if x else x
-        )
-
-    if 'position' in df_players.columns:
-        df_players['position_cat'] = df_players['position'].apply(map_position_category)
+    if os.path.exists(p_path):
+        df_players = conn.execute(f"SELECT * FROM '{p_path}'").df()
     else:
-        df_players['position_cat'] = "Forward"
+        df_players = pd.DataFrame()
 
-    for col in ['xG', 'npxG']:
-        if col in df_players.columns:
-            df_players[col] = df_players[col].round(1)
+    if not df_players.empty:
+        if 'player_name' in df_players.columns:
+            df_players['player_name'] = df_players['player_name'].astype(str).apply(html.unescape)
+            
+        team_col = next((c for c in ['team_title', 'team_name', 'team'] if c in df_players.columns), None)
+        if team_col:
+            df_players['team_title'] = df_players[team_col].astype(str).apply(
+                lambda x: html.unescape(x).split(',')[-1].strip() if x else x
+            )
 
-    if 'xG' in df_players.columns and 'goals' in df_players.columns:
-        df_players['xg_overperformance'] = (df_players['goals'] - df_players['xG']).round(1)
-        
-    if 'npxG' in df_players.columns and 'npg' in df_players.columns:
-        df_players['npxg_overperformance'] = (df_players['npg'] - df_players['npxG']).round(1)
+        if 'position' in df_players.columns:
+            df_players['position_cat'] = df_players['position'].apply(map_position_category)
+        else:
+            df_players['position_cat'] = "Forward"
 
-    if 'time' in df_players.columns:
-        df_players['xg_per_90'] = df_players.apply(
-            lambda r: round((r['xG'] / r['time']) * 90, 1) if r['time'] > 0 else 0.0, axis=1
-        )
-        df_players['npxg_per_90'] = df_players.apply(
-            lambda r: round((r['npxG'] / r['time']) * 90, 1) if r['time'] > 0 else 0.0, axis=1
-        )
+        for col in ['xG', 'npxG', 'xg_overperformance']:
+            if col in df_players.columns:
+                df_players[col] = df_players[col].round(1)
 
-    # Build Team Table Aggregations with GA & xGA
-    if not df_players.empty and 'team_title' in df_players.columns:
-        df_teams = df_players.groupby('team_title').agg(
-            goals_for=('goals', 'sum'),
-            xG=('xG', 'sum'),
-            np_goals_for=('npg', 'sum'),
-            npxG=('npxG', 'sum')
-        ).reset_index()
-        
-        df_teams['matches'] = 7
-        df_teams['goals_against'] = 0
-        df_teams['xGA'] = 0.0
-        df_teams['np_goals_against'] = 0
-        df_teams['npxGA'] = 0.0
-        df_teams['xg_per_90'] = (df_teams['xG'] / 7).round(1)
-        df_teams['xga_per_90'] = (df_teams['xGA'] / 7).round(1)
-        df_teams['npxg_per_90'] = (df_teams['npxG'] / 7).round(1)
-        df_teams['npxga_per_90'] = (df_teams['npxGA'] / 7).round(1)
+        if 'time' in df_players.columns:
+            if 'npxG' in df_players.columns:
+                df_players['npxg_per_90'] = df_players.apply(
+                    lambda r: round((r['npxG'] / r['time']) * 90, 1) if r['time'] > 0 else 0.0, axis=1
+                )
+            if 'npg' in df_players.columns and 'npxG' in df_players.columns:
+                df_players['npxg_overperformance'] = df_players.apply(
+                    lambda r: round(r['npg'] - r['npxG'], 1), axis=1
+                )
+
+        if 'xg_per_90' in df_players.columns:
+            df_players['xg_per_90'] = df_players['xg_per_90'].round(1)
+
+    # 2. Load 2026/27 Team CSV
+    t_path = os.path.join(BASE_DIR, 'data', 'processed', 'epl_teams_xg_2026_clean.csv')
+    if not os.path.exists(t_path):
+        t_path = os.path.join(BASE_DIR, 'data', 'processed', 'team_stats.csv')
+
+    if os.path.exists(t_path):
+        df_teams = conn.execute(f"SELECT * FROM '{t_path}'").df()
     else:
         df_teams = pd.DataFrame()
 
+    if not df_teams.empty:
+        t_team_col = next((c for c in ['team_title', 'team_name', 'team'] if c in df_teams.columns), None)
+        if t_team_col:
+            df_teams['team_title'] = df_teams[t_team_col].astype(str).apply(html.unescape)
+
+        g_col = next((c for c in ['matches', 'games', 'matches_played', 'played'] if c in df_teams.columns), None)
+        if g_col:
+            df_teams['matches'] = df_teams[g_col]
+
+        if 'matches' in df_teams.columns:
+            df_teams['xg_per_90'] = df_teams.apply(
+                lambda r: round(r['xG'] / r['matches'], 1) if r['matches'] > 0 else 0.0, axis=1
+            )
+            df_teams['npxg_per_90'] = df_teams.apply(
+                lambda r: round(r['npxG'] / r['matches'], 1) if r['matches'] > 0 else 0.0, axis=1
+            )
+            df_teams['xga_per_90'] = df_teams.apply(
+                lambda r: round(r['xGA'] / r['matches'], 1) if r['matches'] > 0 else 0.0, axis=1
+            )
+            df_teams['npxga_per_90'] = df_teams.apply(
+                lambda r: round(r['npxGA'] / r['matches'], 1) if r['matches'] > 0 else 0.0, axis=1
+            )
+
+        if 'team_title' in df_players.columns and 'npg' in df_players.columns:
+            team_npg = df_players.groupby('team_title')['npg'].sum().reset_index()
+            team_npg.rename(columns={'npg': 'np_goals_for'}, inplace=True)
+            df_teams = df_teams.merge(team_npg, on='team_title', how='left')
+            df_teams['np_goals_for'] = df_teams['np_goals_for'].fillna(df_teams['goals_for'] if 'goals_for' in df_teams.columns else 0)
+        else:
+            df_teams['np_goals_for'] = df_teams['goals_for'] if 'goals_for' in df_teams.columns else 0
+
+        if 'goals_against' in df_teams.columns and 'xGA' in df_teams.columns and 'npxGA' in df_teams.columns:
+            df_teams['np_goals_against'] = df_teams['goals_against'] - (df_teams['xGA'] - df_teams['npxGA']).round()
+            df_teams['np_goals_against'] = df_teams['np_goals_against'].apply(lambda x: max(0, int(x)))
+        else:
+            df_teams['np_goals_against'] = df_teams['goals_against'] if 'goals_against' in df_teams.columns else 0
+
+    conn.close()
     return df_players, df_teams
 
 df_p, df_t = load_all_data()
@@ -147,7 +163,7 @@ def render_dashboard(df_p, df_t, season_title_label, season_key):
     st.header(f"📅 {season_title_label} Season Overview")
     
     if df_p.empty:
-        st.warning("Data not available from DuckDB database.")
+        st.warning("Data not available.")
         return
 
     filtered_df = df_p.copy()
@@ -215,7 +231,6 @@ def render_dashboard(df_p, df_t, season_title_label, season_key):
 
     plot_filtered_df = filtered_df.copy()
 
-    # Filter to top 33% of xG performers by default if no players manually selected
     if selected_plot_players:
         plot_filtered_df = df_p[df_p['player_name'].isin(selected_plot_players)]
     else:
@@ -270,7 +285,6 @@ def render_dashboard(df_p, df_t, season_title_label, season_key):
     if selected_players:
         table_filtered_df = df_p[df_p['player_name'].isin(selected_players)]
 
-    # Position column removed
     if table_penalties:
         ordered_cols = [
             ('player_name', 'Player'),
@@ -328,7 +342,6 @@ def render_dashboard(df_p, df_t, season_title_label, season_key):
     if selected_team_table:
         team_filtered_df = team_filtered_df[team_filtered_df['team_title'].isin(selected_team_table)]
 
-    # Restored Goals Against (GA), xGA, xG Per 90, xGA Per 90
     if team_penalties:
         team_cols = [
             ('team_title', 'Team'),
