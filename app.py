@@ -37,7 +37,7 @@ def map_position_category(pos_str):
     elif 'D' in pos: return "Defender"
     return "Other"
 
-@st.cache_data
+@st.cache_data(ttl=3600)  # refresh data at least once an hour
 def load_all_data():
     db_path = os.path.join(BASE_DIR, 'dbt_transforms', 'dev.duckdb')
     if not os.path.exists(db_path):
@@ -98,27 +98,24 @@ def load_all_data():
             lambda r: round((r['npxG'] / r['time']) * 90, 1) if r['time'] > 0 else 0.0, axis=1
         )
 
-    # Calculate team aggregations dynamically from player data
-    if not df_players.empty and 'team_title' in df_players.columns:
-        df_teams = df_players.groupby('team_title').agg(
-            goals_for=('goals', 'sum'),
-            xG=('xG', 'sum'),
-            np_goals_for=('npg', 'sum'),
-            npxG=('npxG', 'sum'),
-            max_mins=('time', 'max')
-        ).reset_index()
-        
-        # Determine games played based on max individual minutes played per team
-        df_teams['matches'] = df_teams['max_mins'].apply(lambda m: max(1, round(m / 90)))
-        
-        df_teams['goals_against'] = 0
-        df_teams['xGA'] = 0.0
-        df_teams['np_goals_against'] = 0
-        df_teams['npxGA'] = 0.0
-        df_teams['xg_per_90'] = df_teams.apply(lambda r: round(r['xG'] / r['matches'], 1) if r['matches'] > 0 else 0.0, axis=1)
-        df_teams['xga_per_90'] = 0.0
-        df_teams['npxg_per_90'] = df_teams.apply(lambda r: round(r['npxG'] / r['matches'], 1) if r['matches'] > 0 else 0.0, axis=1)
-        df_teams['npxga_per_90'] = 0.0
+    # Team table: real team totals (incl. goals against and xGA) from the pipeline
+    teams_csv = os.path.join(BASE_DIR, 'data', 'processed', 'epl_teams_xg_2026_clean.csv')
+    if os.path.exists(teams_csv):
+        df_teams = duckdb.query(f"SELECT * FROM read_csv_auto('{teams_csv}')").df()
+
+        # Non-penalty goals for each team, added up from the player data
+        np_goals = df_players.groupby('team_title')['npg'].sum()
+        df_teams['np_goals_for'] = df_teams['team_title'].map(np_goals).fillna(0).astype(int)
+
+        def per_match(col):
+            return df_teams.apply(lambda r: round(r[col] / r['matches'], 1) if r['matches'] > 0 else 0.0, axis=1)
+
+        df_teams['xg_per_90'] = per_match('xG')
+        df_teams['xga_per_90'] = per_match('xGA')
+        df_teams['npxg_per_90'] = per_match('npxG')
+        df_teams['npxga_per_90'] = per_match('npxGA')
+        for col in ['xG', 'xGA', 'npxG', 'npxGA']:
+            df_teams[col] = df_teams[col].round(1)
     else:
         df_teams = pd.DataFrame()
 
@@ -352,7 +349,6 @@ def render_dashboard(df_p, df_t, season_title_label, season_key):
             ('team_title', 'Team'),
             ('matches', 'Games'),
             ('np_goals_for', 'Non-Penalty Goals For (G)'),
-            ('np_goals_against', 'Non-Penalty Goals Against (GA)'),
             ('npxG', 'Non-Penalty xG'),
             ('npxg_per_90', 'Non-Penalty xG Per 90'),
             ('npxGA', 'Non-Penalty xGA'),
