@@ -37,8 +37,10 @@ def map_position_category(pos_str):
     elif 'D' in pos: return "Defender"
     return "Other"
 
-@st.cache_data(ttl=3600)  # refresh data at least once an hour
-def load_all_data():
+@st.cache_data
+def load_all_data(data_version):
+    # data_version changes whenever the daily pipeline writes new data,
+    # which makes Streamlit reload instead of reusing its cached copy.
     db_path = os.path.join(BASE_DIR, 'dbt_transforms', 'dev.duckdb')
     if not os.path.exists(db_path):
         db_path = os.path.join(BASE_DIR, 'dev.duckdb')
@@ -121,7 +123,14 @@ def load_all_data():
 
     return df_players, df_teams
 
-df_p, df_t = load_all_data()
+def get_data_version():
+    files = [
+        os.path.join(BASE_DIR, 'dbt_transforms', 'dev.duckdb'),
+        os.path.join(BASE_DIR, 'data', 'processed', 'epl_teams_xg_2026_clean.csv'),
+    ]
+    return tuple(os.path.getmtime(f) for f in files if os.path.exists(f))
+
+df_p, df_t = load_all_data(get_data_version())
 
 # --- RESET FILTERS CALLBACK ---
 def reset_filters():
@@ -219,13 +228,15 @@ def render_dashboard(df_p, df_t, season_title_label, season_key):
 
     plot_filtered_df = filtered_df.copy()
 
-    # Default to top 33% of xG performers if no player is manually searched
+    # Default to the top 25% of players by actual goals if no player is manually searched
     if selected_plot_players:
         plot_filtered_df = df_p[df_p['player_name'].isin(selected_plot_players)]
     else:
-        if not plot_filtered_df.empty and plot_xg_col in plot_filtered_df.columns:
-            top_33_cutoff = plot_filtered_df[plot_xg_col].quantile(0.67)
-            plot_filtered_df = plot_filtered_df[plot_filtered_df[plot_xg_col] >= top_33_cutoff]
+        if not plot_filtered_df.empty and plot_goal_col in plot_filtered_df.columns:
+            top_25_count = max(1, round(len(plot_filtered_df) * 0.25))
+            plot_filtered_df = plot_filtered_df.sort_values(
+                [plot_goal_col, plot_xg_col], ascending=False
+            ).head(top_25_count)
 
     fig = px.scatter(
         plot_filtered_df,
