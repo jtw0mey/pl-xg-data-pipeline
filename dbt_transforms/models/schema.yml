@@ -1,0 +1,14 @@
+version: 2
+
+models:
+  - name: stg_understat_matches
+    columns:
+      - name: player_id
+        tests:
+          - not_null
+
+  - name: fct_player_xg_summary
+    columns:
+      - name: player_id
+        tests:
+          - not_null
