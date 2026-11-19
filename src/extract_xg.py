@@ -1,5 +1,7 @@
+import codecs
 import json
 import os
+import re
 import sys
 import requests
 
@@ -12,33 +14,37 @@ HEADERS = {
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/129.0.0.0 Safari/537.36"
     ),
-    "Accept": "application/json, text/javascript, */*; q=0.01",
-    "X-Requested-With": "XMLHttpRequest",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
 }
 
+def extract_embedded_json(html, var_name):
+    """Decode Understat's hex-escaped JSON.parse('...') script variables."""
+    pattern = rf"{var_name}\s*=\s*JSON\.parse\('([^']+)'\)"
+    match = re.search(pattern, html)
+    if not match:
+        return None
+    decoded_str = codecs.decode(match.group(1), "unicode_escape")
+    return json.loads(decoded_str)
+
 def fetch_season_data(session, season):
-    """Fetch player and team metrics directly from Understat's JSON API."""
+    """Fetch player and team metrics from Understat's league page."""
     print(f"Fetching data for {season}/{int(season)+1} season...")
-    url = f"https://understat.com/getLeagueData/EPL/{season}"
-    headers = {**HEADERS, "Referer": f"https://understat.com/league/EPL/{season}"}
+    url = f"https://understat.com/league/EPL/{season}"
 
-    # Warm up session cookies on the league page first
-    session.get(f"https://understat.com/league/EPL/{season}", headers=headers, timeout=20)
-
-    response = session.get(url, headers=headers, timeout=20)
+    response = session.get(url, headers=HEADERS, timeout=20)
     print(f"HTTP {response.status_code} | Response length: {len(response.text)} chars")
 
-    if response.status_code != 200 or not response.text.strip():
-        raise ValueError(
-            f"Blocked or empty response (HTTP {response.status_code}): {response.text[:200]!r}"
-        )
+    if response.status_code != 200:
+        raise ValueError(f"HTTP {response.status_code}: {response.text[:200]!r}")
 
-    payload = response.json()
-    players = payload.get("players")
-    teams = payload.get("teams")
+    players = extract_embedded_json(response.text, "playersData")
+    teams = extract_embedded_json(response.text, "teamsData")
 
     if not players or not teams:
-        raise ValueError(f"Missing 'players' or 'teams' keys in response: {list(payload.keys())}")
+        # Print snippet of the 26k HTML so we can see why variables weren't found
+        snippet = re.sub(r"\s+", " ", response.text[:400])
+        raise ValueError(f"Could not find playersData/teamsData in HTML. Preview: {snippet!r}")
 
     return players, teams
 
